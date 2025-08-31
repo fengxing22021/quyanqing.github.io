@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>高灵敏度声音检测器</title>
+    <title>无阈值声音检测器</title>
     <style>
         * {
             margin: 0;
@@ -185,34 +185,12 @@
             color: white;
         }
         
-        .instructions {
-            margin-top: 30px;
-            padding: 20px;
-            background-color: #f8f9fa;
-            border-radius: 15px;
-            text-align: left;
-        }
-        
-        .instructions h3 {
-            margin-bottom: 10px;
-            color: #2c3e50;
-        }
-        
-        .instructions ul {
-            padding-left: 20px;
-        }
-        
-        .instructions li {
-            margin-bottom: 8px;
-            line-height: 1.5;
-        }
-        
-        .test-result {
+        .current-settings {
             margin-top: 20px;
             padding: 15px;
             background: #e8f4fc;
             border-radius: 10px;
-            border-left: 4px solid #3498db;
+            font-size: 0.9rem;
         }
         
         @media (max-width: 600px) {
@@ -238,12 +216,12 @@
 </head>
 <body>
     <div class="container">
-        <h1>高灵敏度声音检测器</h1>
-        <p class="description">带增益放大和灵敏度调节，确保说话声音也能被检测到</p>
+        <h1>无阈值声音检测器</h1>
+        <p class="description">音量完全由增益和灵敏度控制，无任何上限限制</p>
         
         <div class="volume-display">
             <div class="volume-value" id="volume-value">0</div>
-            <div class="volume-unit">音量强度</div>
+            <div class="volume-unit">原始音量值</div>
         </div>
         
         <div class="volume-bar-container">
@@ -252,15 +230,15 @@
         
         <div class="controls-container">
             <div class="control-group">
-                <div class="control-title">灵敏度调节</div>
-                <input type="range" min="1" max="20" value="15" class="sensitivity-slider" id="sensitivity-slider">
-                <div class="slider-value">当前: <span id="sensitivity-value">15</span> (建议10-20)</div>
+                <div class="control-title">灵敏度调节 (1-100)</div>
+                <input type="range" min="1" max="100" value="50" class="sensitivity-slider" id="sensitivity-slider">
+                <div class="slider-value">当前: <span id="sensitivity-value">50</span></div>
             </div>
             
             <div class="control-group">
-                <div class="control-title">增益放大</div>
-                <input type="range" min="1" max="10" value="8" class="gain-slider" id="gain-slider">
-                <div class="slider-value">当前: <span id="gain-value">8</span>倍 (建议5-10倍)</div>
+                <div class="control-title">增益放大 (1-20倍)</div>
+                <input type="range" min="1" max="20" value="5" class="gain-slider" id="gain-slider">
+                <div class="slider-value">当前: <span id="gain-value">5</span>倍</div>
             </div>
         </div>
         
@@ -271,26 +249,11 @@
         
         <div class="status inactive" id="status">未激活</div>
         
-        <div class="test-result">
-            <strong>测试提示：</strong> 如果说话没有反应，请尝试：
-            <ol>
-                <li>将增益调到8-10倍</li>
-                <li>将灵敏度调到15-20</li>
-                <li>靠近麦克风说话</li>
-                <li>检查浏览器麦克风权限</li>
-            </ol>
-        </div>
-        
-        <div class="instructions">
-            <h3>使用说明：</h3>
-            <ul>
-                <li>点击"开始检测"按钮授权麦克风访问权限</li>
-                <li><strong>灵敏度</strong>：值越高，对声音越敏感（建议15-20）</li>
-                <li><strong>增益放大</strong>：放大输入信号（建议8-10倍）</li>
-                <li>对着麦克风说话，观察音量条变化</li>
-                <li>如果说话没反应，请提高增益和灵敏度</li>
-                <li>完成后点击"停止检测"按钮结束</li>
-            </ul>
+        <div class="current-settings">
+            <strong>当前设置效果：</strong><br>
+            灵敏度: <span id="sensitivity-effect">中等</span> | 
+            增益: <span id="gain-effect">中等</span> | 
+            最大音量: <span id="max-volume">约 50%</span>
         </div>
     </div>
 
@@ -305,6 +268,9 @@
             const sensitivityValue = document.getElementById('sensitivity-value');
             const gainSlider = document.getElementById('gain-slider');
             const gainValue = document.getElementById('gain-value');
+            const sensitivityEffect = document.getElementById('sensitivity-effect');
+            const gainEffect = document.getElementById('gain-effect');
+            const maxVolume = document.getElementById('max-volume');
             
             let audioContext;
             let analyser;
@@ -312,24 +278,49 @@
             let gainNode;
             let javascriptNode;
             let isMonitoring = false;
-            let sensitivity = 15; // 默认灵敏度（较高）
-            let gainLevel = 8; // 默认增益（较高）
+            let sensitivity = 50; // 1-100
+            let gainLevel = 5; // 1-20倍
             
             // 更新灵敏度
             sensitivitySlider.addEventListener('input', function() {
                 sensitivity = parseInt(this.value);
                 sensitivityValue.textContent = sensitivity;
+                updateSettingsEffect();
             });
             
             // 更新增益
             gainSlider.addEventListener('input', function() {
                 gainLevel = parseInt(this.value);
                 gainValue.textContent = gainLevel;
+                updateSettingsEffect();
                 
                 if (gainNode) {
                     gainNode.gain.value = gainLevel;
                 }
             });
+            
+            // 更新设置效果说明
+            function updateSettingsEffect() {
+                // 灵敏度效果描述
+                if (sensitivity < 20) sensitivityEffect.textContent = '很低';
+                else if (sensitivity < 40) sensitivityEffect.textContent = '较低';
+                else if (sensitivity < 60) sensitivityEffect.textContent = '中等';
+                else if (sensitivity < 80) sensitivityEffect.textContent = '较高';
+                else sensitivityEffect.textContent = '很高';
+                
+                // 增益效果描述
+                if (gainLevel < 4) gainEffect.textContent = '较低';
+                else if (gainLevel < 8) gainEffect.textContent = '中等';
+                else if (gainLevel < 12) gainEffect.textContent = '较高';
+                else gainEffect.textContent = '很高';
+                
+                // 预估最大音量
+                const estimatedMax = Math.min(100, Math.round((sensitivity / 100) * (gainLevel / 20) * 100));
+                maxVolume.textContent = `约 ${estimatedMax}%`;
+            }
+            
+            // 初始化设置效果
+            updateSettingsEffect();
             
             // 开始检测
             startBtn.addEventListener('click', function() {
@@ -347,52 +338,54 @@
                         analyser = audioContext.createAnalyser();
                         microphone = audioContext.createMediaStreamSource(stream);
                         
-                        // 创建增益节点放大声音（使用较高增益）
+                        // 创建增益节点放大声音
                         gainNode = audioContext.createGain();
                         gainNode.gain.value = gainLevel;
                         
                         javascriptNode = audioContext.createScriptProcessor(2048, 1, 1);
                         
-                        // 配置分析器 - 使用更敏感的设置
-                        analyser.smoothingTimeConstant = 0.3; // 降低平滑度，使响应更快
+                        // 配置分析器
+                        analyser.smoothingTimeConstant = 0.5;
                         analyser.fftSize = 1024;
                         
-                        // 连接节点：麦克风 -> 增益 -> 分析器 -> 处理器
+                        // 连接节点
                         microphone.connect(gainNode);
                         gainNode.connect(analyser);
                         analyser.connect(javascriptNode);
                         javascriptNode.connect(audioContext.destination);
                         
-                        // 处理音频数据
+                        // 处理音频数据 - 无阈值限制
                         javascriptNode.onaudioprocess = function() {
                             const array = new Uint8Array(analyser.frequencyBinCount);
                             analyser.getByteFrequencyData(array);
                             
-                            // 计算音量值 - 使用更敏感的计算方法
-                            let max = 0;
+                            // 计算原始音量值
+                            let sum = 0;
                             for (let i = 0; i < array.length; i++) {
-                                if (array[i] > max) {
-                                    max = array[i];
-                                }
+                                sum += array[i];
                             }
                             
-                            // 使用最大值而不是平均值，对突发声音更敏感
-                            // 应用增益和灵敏度调整
-                            const adjustedValue = Math.min(100, max * (sensitivity / 10) * (gainLevel / 5));
+                            const average = sum / array.length;
                             
-                            // 更新显示
-                            volumeValue.textContent = Math.round(adjustedValue);
+                            // 应用增益和灵敏度 - 无上限限制
+                            const rawVolume = average * (sensitivity / 50) * (gainLevel / 5);
                             
-                            // 更新音量条
-                            volumeBar.style.width = adjustedValue + '%';
+                            // 显示原始值（可能超过100）
+                            volumeValue.textContent = Math.round(rawVolume);
+                            
+                            // 音量条显示（超过100%时继续延伸）
+                            const displayWidth = Math.min(100, rawVolume);
+                            volumeBar.style.width = displayWidth + '%';
                             
                             // 根据音量改变颜色
-                            if (adjustedValue < 30) {
+                            if (rawVolume < 30) {
                                 volumeBar.style.background = '#2ecc71';
-                            } else if (adjustedValue < 70) {
+                            } else if (rawVolume < 70) {
                                 volumeBar.style.background = '#f1c40f';
-                            } else {
+                            } else if (rawVolume < 120) {
                                 volumeBar.style.background = '#e74c3c';
+                            } else {
+                                volumeBar.style.background = '#8b0000'; // 深红色表示超限
                             }
                         };
                     })
